@@ -6,7 +6,9 @@ services:
     plan: free
     region: oregon
     buildCommand: |
-      pip install yt-dlp
+      apt-get update && apt-get install -y python3-pip python3-venv pipx
+      pipx ensurepath
+      pipx install yt-dlp
       npm install
     startCommand: npm start
     envVars:
@@ -16,3 +18,5 @@ services:
         sync: false
       - key: DISCORD_CHANNEL_ID
         value: 1475868986301223003
+      - key: PATH
+        value: /opt/render/project/src/node_modules/.bin:/opt/render/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
