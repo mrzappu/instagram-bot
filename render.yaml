@@ -1,0 +1,20 @@
+services:
+  - type: web
+    name: instagram-discord-bot
+    runtime: node
+    repo: https://github.com/YOUR_USERNAME/instagram-discord-bot
+    plan: free
+    region: oregon
+    buildCommand: npm install
+    startCommand: npm run deploy && npm start
+    envVars:
+      - key: NODE_VERSION
+        value: 18.18.0
+      - key: DISCORD_BOT_TOKEN
+        sync: false
+      - key: DISCORD_CLIENT_ID
+        sync: false
+      - key: DISCORD_GUILD_ID
+        sync: false
+      - key: APIFY_API_TOKEN
+        sync: false
