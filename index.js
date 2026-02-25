@@ -1,4 +1,3 @@
-// index.js - Main Instagram Discord Bot with Slash Commands
 require('dotenv').config();
 const express = require('express');
 const ApifyService = require('./apifyService');
@@ -6,6 +5,14 @@ const DiscordBot = require('./discordBot');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+// Log environment variables (without revealing full tokens)
+console.log('🔍 Environment Check:');
+console.log(`- DISCORD_BOT_TOKEN: ${process.env.DISCORD_BOT_TOKEN ? '✅ Set' : '❌ Missing'}`);
+console.log(`- DISCORD_CLIENT_ID: ${process.env.DISCORD_CLIENT_ID ? '✅ Set' : '❌ Missing'}`);
+console.log(`- DISCORD_GUILD_ID: ${process.env.DISCORD_GUILD_ID ? '✅ Set' : '❌ Missing'}`);
+console.log(`- APIFY_API_TOKEN: ${process.env.APIFY_API_TOKEN ? '✅ Set' : '❌ Missing'}`);
+console.log('');
 
 // Initialize services
 const apify = new ApifyService(process.env.APIFY_API_TOKEN);
@@ -69,13 +76,12 @@ app.get('/', (req, res) => {
                     padding: 10px;
                     border-bottom: 1px solid #444;
                 }
+                .command-item:last-child {
+                    border-bottom: none;
+                }
                 .command-name {
                     color: #ff0000;
                     font-weight: bold;
-                }
-                .command-desc {
-                    color: #aaa;
-                    margin-left: 20px;
                 }
                 .status {
                     text-align: center;
@@ -99,28 +105,22 @@ app.get('/', (req, res) => {
                 
                 <div class="command-list">
                     <div class="command-item">
-                        <span class="command-name">/help</span>
-                        <span class="command-desc">- Show all available commands</span>
+                        <span class="command-name">/help</span> - Show all available commands
                     </div>
                     <div class="command-item">
-                        <span class="command-name">/profile &lt;username&gt;</span>
-                        <span class="command-desc">- Get Instagram profile details with ban check</span>
+                        <span class="command-name">/profile &lt;username&gt;</span> - Get Instagram profile details with ban check
                     </div>
                     <div class="command-item">
-                        <span class="command-name">/stories &lt;username&gt;</span>
-                        <span class="command-desc">- Get active Instagram stories</span>
+                        <span class="command-name">/stories &lt;username&gt;</span> - Get active Instagram stories
                     </div>
                     <div class="command-item">
-                        <span class="command-name">/reel &lt;url&gt;</span>
-                        <span class="command-desc">- Download Instagram reel</span>
+                        <span class="command-name">/reel &lt;url&gt;</span> - Download Instagram reel
                     </div>
                     <div class="command-item">
-                        <span class="command-name">/post &lt;url&gt;</span>
-                        <span class="command-desc">- Download Instagram post</span>
+                        <span class="command-name">/post &lt;url&gt;</span> - Download Instagram post
                     </div>
                     <div class="command-item">
-                        <span class="command-name">/stats</span>
-                        <span class="command-desc">- Show bot statistics</span>
+                        <span class="command-name">/stats</span> - Show bot statistics
                     </div>
                 </div>
                 
@@ -143,12 +143,14 @@ app.get('/health', (req, res) => {
         status: 'IMPOSTER ONLINE',
         version: '3.0.0',
         discord: discordBot.getStatus(),
+        uptime: process.uptime(),
+        timestamp: new Date().toISOString(),
         copyright: 'IMPOSTER 2026-2027'
     });
 });
 
 // ==================== START SERVER ====================
-app.listen(PORT, () => {
+app.listen(PORT, '0.0.0.0', () => {
     console.log(`
 ╔══════════════════════════════════════════════════════════╗
 ║   ██╗███╗   ███╗██████╗  ██████╗ ███████╗████████╗     ║
