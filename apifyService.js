@@ -1,4 +1,3 @@
-// apifyService.js - Apify API Integration
 const axios = require('axios');
 
 class ApifyService {
@@ -7,32 +6,28 @@ class ApifyService {
         this.baseUrl = 'https://api.apify.com/v2';
     }
 
-    // ==================== PROFILE SCRAPER ====================
     async getProfileDetails(username) {
         console.log(`🔍 Fetching profile for: ${username}`);
         
         try {
             const response = await axios.post(
                 `${this.baseUrl}/acts/coderx~instagram-profile-scraper-api/runs`,
-                {
-                    usernames: [username]
-                },
-                {
-                    params: {
-                        token: this.apiToken,
-                        waitForFinish: 60
-                    }
+                { usernames: [username] },
+                { 
+                    params: { 
+                        token: this.apiToken, 
+                        waitForFinish: 60 
+                    } 
                 }
             );
 
             const runId = response.data.data.id;
+            console.log(`⏳ Waiting for profile data...`);
             await this.delay(5000);
             
             const datasetResponse = await axios.get(
                 `${this.baseUrl}/acts/coderx~instagram-profile-scraper-api/runs/${runId}/dataset/items`,
-                {
-                    params: { token: this.apiToken }
-                }
+                { params: { token: this.apiToken } }
             );
 
             return this.formatProfileData(datasetResponse.data[0], username);
@@ -119,34 +114,32 @@ class ApifyService {
         };
     }
 
-    // ==================== STORY VIEWER ====================
     async getStories(username) {
         console.log(`📖 Fetching stories for: ${username}`);
         
         try {
             const response = await axios.post(
                 `${this.baseUrl}/acts/igview-owner~instagram-story-viewer/runs`,
-                {
-                    usernames: [username],
-                    includeUserInfo: true,
-                    includeStickers: true
+                { 
+                    usernames: [username], 
+                    includeUserInfo: true, 
+                    includeStickers: true 
                 },
-                {
-                    params: {
-                        token: this.apiToken,
-                        waitForFinish: 60
-                    }
+                { 
+                    params: { 
+                        token: this.apiToken, 
+                        waitForFinish: 60 
+                    } 
                 }
             );
 
             const runId = response.data.data.id;
+            console.log(`⏳ Waiting for story data...`);
             await this.delay(5000);
             
             const datasetResponse = await axios.get(
                 `${this.baseUrl}/acts/igview-owner~instagram-story-viewer/runs/${runId}/dataset/items`,
-                {
-                    params: { token: this.apiToken }
-                }
+                { params: { token: this.apiToken } }
             );
 
             return this.formatStoriesData(datasetResponse.data);
@@ -181,32 +174,28 @@ class ApifyService {
         return stories;
     }
 
-    // ==================== REEL DOWNLOADER ====================
     async getReel(reelUrl) {
         console.log(`🎬 Fetching reel: ${reelUrl}`);
         
         try {
             const response = await axios.post(
                 `${this.baseUrl}/acts/codenest~instagram-reels-downloader-scraper/runs`,
-                {
-                    reel_urls: [{ url: reelUrl }]
-                },
-                {
-                    params: {
-                        token: this.apiToken,
-                        waitForFinish: 60
-                    }
+                { reel_urls: [{ url: reelUrl }] },
+                { 
+                    params: { 
+                        token: this.apiToken, 
+                        waitForFinish: 60 
+                    } 
                 }
             );
 
             const runId = response.data.data.id;
+            console.log(`⏳ Waiting for reel data...`);
             await this.delay(5000);
             
             const datasetResponse = await axios.get(
                 `${this.baseUrl}/acts/codenest~instagram-reels-downloader-scraper/runs/${runId}/dataset/items`,
-                {
-                    params: { token: this.apiToken }
-                }
+                { params: { token: this.apiToken } }
             );
 
             return this.formatReelData(datasetResponse.data);
@@ -240,32 +229,28 @@ class ApifyService {
         };
     }
 
-    // ==================== POST DOWNLOADER ====================
     async getPost(postUrl) {
         console.log(`📸 Fetching post: ${postUrl}`);
         
         try {
             const response = await axios.post(
                 `${this.baseUrl}/acts/igview-owner~instagram-video-downloader/runs`,
-                {
-                    instagram_urls: [postUrl]
-                },
-                {
-                    params: {
-                        token: this.apiToken,
-                        waitForFinish: 60
-                    }
+                { instagram_urls: [postUrl] },
+                { 
+                    params: { 
+                        token: this.apiToken, 
+                        waitForFinish: 60 
+                    } 
                 }
             );
 
             const runId = response.data.data.id;
+            console.log(`⏳ Waiting for post data...`);
             await this.delay(5000);
             
             const datasetResponse = await axios.get(
                 `${this.baseUrl}/acts/igview-owner~instagram-video-downloader/runs/${runId}/dataset/items`,
-                {
-                    params: { token: this.apiToken }
-                }
+                { params: { token: this.apiToken } }
             );
 
             return this.formatPostData(datasetResponse.data);
