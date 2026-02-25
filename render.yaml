@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: instagram-downloader-no-api
+    runtime: node
+    repo: https://github.com/YOUR_USERNAME/instagram-downloader-no-api
+    plan: free
+    region: oregon
+    buildCommand: |
+      pip install yt-dlp
+      npm install
+    startCommand: npm start
+    envVars:
+      - key: NODE_VERSION
+        value: 18.18.0
+      - key: DISCORD_BOT_TOKEN
+        sync: false
+      - key: DISCORD_CHANNEL_ID
+        value: 1475868986301223003
