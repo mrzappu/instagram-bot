@@ -1,4 +1,4 @@
-// index.js - Main Discord Bot with yt-dlp (NO API KEYS)
+// index.js - Fixed yt-dlp installation
 require('dotenv').config();
 const { Client, GatewayIntentBits, EmbedBuilder } = require('discord.js');
 const express = require('express');
@@ -6,6 +6,8 @@ const InstagramDownloader = require('./instagramDownloader');
 const { exec } = require('child_process');
 const util = require('util');
 const execPromise = util.promisify(exec);
+const fs = require('fs');
+const path = require('path');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -13,23 +15,67 @@ const PORT = process.env.PORT || 3000;
 // Initialize downloader
 const downloader = new InstagramDownloader();
 
-// Check if yt-dlp is installed
-async function checkYtDlp() {
-    try {
-        const { stdout } = await execPromise('yt-dlp --version');
-        console.log(`✅ yt-dlp version ${stdout.trim()} found`);
-        return true;
-    } catch (error) {
-        console.error('❌ yt-dlp not found! Attempting to install...');
+// Check multiple possible yt-dlp locations
+async function findYtDlp() {
+    const possiblePaths = [
+        'yt-dlp',                    // in PATH
+        '/tmp/yt-dlp',                // downloaded binary
+        '/opt/render/.local/bin/yt-dlp', // pipx location
+        './yt-dlp',                   // local folder
+        '/usr/local/bin/yt-dlp'       // system location
+    ];
+    
+    for (const ytPath of possiblePaths) {
         try {
-            await execPromise('pip install yt-dlp');
-            console.log('✅ yt-dlp installed successfully');
-            return true;
-        } catch (installError) {
-            console.error('❌ Failed to install yt-dlp:', installError.message);
-            return false;
+            const { stdout } = await execPromise(`${ytPath} --version`);
+            console.log(`✅ yt-dlp found at ${ytPath} (version ${stdout.trim()})`);
+            return ytPath;
+        } catch (e) {
+            // Not found at this path
         }
     }
+    return null;
+}
+
+async function installYtDlp() {
+    console.log('📦 Attempting to install yt-dlp...');
+    
+    // Method 1: Download static binary (MOST RELIABLE)
+    try {
+        console.log('Method 1: Downloading static binary...');
+        await execPromise('curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /tmp/yt-dlp');
+        await execPromise('chmod a+rx /tmp/yt-dlp');
+        const { stdout } = await execPromise('/tmp/yt-dlp --version');
+        console.log(`✅ yt-dlp binary installed: version ${stdout.trim()}`);
+        return '/tmp/yt-dlp';
+    } catch (error) {
+        console.log('Method 1 failed:', error.message);
+    }
+    
+    // Method 2: Try pipx (safer than pip)
+    try {
+        console.log('Method 2: Trying pipx...');
+        await execPromise('pipx install yt-dlp');
+        await execPromise('pipx ensurepath');
+        const { stdout } = await execPromise('/opt/render/.local/bin/yt-dlp --version');
+        console.log(`✅ yt-dlp installed via pipx: version ${stdout.trim()}`);
+        return '/opt/render/.local/bin/yt-dlp';
+    } catch (error) {
+        console.log('Method 2 failed:', error.message);
+    }
+    
+    // Method 3: Try with --break-system-packages (last resort)
+    try {
+        console.log('Method 3: Trying pip with override...');
+        await execPromise('pip install --break-system-packages yt-dlp');
+        const { stdout } = await execPromise('yt-dlp --version');
+        console.log(`✅ yt-dlp installed via pip override: version ${stdout.trim()}`);
+        return 'yt-dlp';
+    } catch (error) {
+        console.log('Method 3 failed:', error.message);
+    }
+    
+    return null;
 }
 
 // Discord Client Setup
@@ -62,17 +108,26 @@ client.once('ready', async () => {
 ╚══════════════════════════════════════════════════════════╝
     `);
 
-    // Check yt-dlp installation
-    const ytDlpReady = await checkYtDlp();
-    if (!ytDlpReady) {
-        console.error('❌ Bot cannot function without yt-dlp. Exiting...');
+    // Check and install yt-dlp
+    let ytPath = await findYtDlp();
+    if (!ytPath) {
+        console.log('❌ yt-dlp not found, attempting installation...');
+        ytPath = await installYtDlp();
+    }
+    
+    if (ytPath) {
+        console.log(`✅ Bot ready to download using: ${ytPath}`);
+        // Store the path for later use
+        process.env.YT_DLP_PATH = ytPath;
+    } else {
+        console.error('❌ Could not install yt-dlp. Bot cannot function.');
         process.exit(1);
     }
 
     client.user.setActivity('Instagram Links', { type: 3 });
 });
 
-// Message Handler - Auto detect Instagram links
+// Message Handler
 client.on('messageCreate', async (message) => {
     if (message.author.bot) return;
     if (message.channel.id !== TARGET_CHANNEL_ID) return;
@@ -83,17 +138,14 @@ client.on('messageCreate', async (message) => {
 
     console.log(`🔗 Instagram link detected: ${instagramUrl} from ${message.author.tag}`);
 
-    // Send typing indicator
     await message.channel.sendTyping();
 
-    // Send initial status
     const statusMsg = await message.reply({
         content: `📥 Downloading Instagram content...\nURL: ${instagramUrl}`,
         allowedMentions: { repliedUser: true }
     });
 
-    // Download the media
-    const media = await downloader.downloadMedia(instagramUrl);
+    const media = await downloader.downloadMedia(instagramUrl, process.env.YT_DLP_PATH);
 
     if (!media) {
         return await statusMsg.edit({
@@ -101,7 +153,6 @@ client.on('messageCreate', async (message) => {
         });
     }
 
-    // Create embed
     const embed = new EmbedBuilder()
         .setColor(0xff0000)
         .setTitle('📥 Instagram Downloader')
@@ -113,21 +164,8 @@ client.on('messageCreate', async (message) => {
         .setFooter({ text: `IMPOSTER Instagram Bot • No API Required` })
         .setTimestamp();
 
-    if (media.uploader) {
-        embed.addFields({ name: '👤 Uploader', value: `@${media.uploader}`, inline: true });
-    }
-
-    if (media.description) {
-        const shortDesc = media.description.length > 100 
-            ? media.description.substring(0, 100) + '...' 
-            : media.description;
-        embed.addFields({ name: '📝 Caption', value: shortDesc });
-    }
-
-    // Send the embed
     await statusMsg.edit({ content: null, embeds: [embed] });
 
-    // Send the file
     try {
         await message.channel.send({
             files: [{
@@ -141,13 +179,7 @@ client.on('messageCreate', async (message) => {
         await message.channel.send(`❌ Failed to send file. The file might be too large for Discord.`);
     }
 
-    // Clean up temp files
     await downloader.cleanup(media.filePath);
-});
-
-// Error Handler
-client.on('error', (error) => {
-    console.error('Discord client error:', error);
 });
 
 // Express server for Render
@@ -186,12 +218,6 @@ app.get('/', (req, res) => {
                 .online {
                     color: #00ff00;
                 }
-                .feature {
-                    background: #333;
-                    padding: 10px;
-                    margin: 10px 0;
-                    border-radius: 5px;
-                }
                 .footer {
                     margin-top: 30px;
                     color: #ff0000;
@@ -208,16 +234,6 @@ app.get('/', (req, res) => {
                     <p>Monitoring Channel: <code>${TARGET_CHANNEL_ID}</code></p>
                 </div>
                 
-                <div class="feature">
-                    <strong>🔥 NO API KEYS REQUIRED</strong>
-                </div>
-                <div class="feature">
-                    <strong>📥 Powered by yt-dlp</strong>
-                </div>
-                <div class="feature">
-                    <strong>🎯 Just paste any Instagram link!</strong>
-                </div>
-                
                 <div class="footer">
                     © IMPOSTER 2026-2027
                 </div>
@@ -232,6 +248,7 @@ app.get('/health', (req, res) => {
         status: 'online',
         bot: client.user?.tag || 'Not connected',
         channel: TARGET_CHANNEL_ID,
+        ytDlpPath: process.env.YT_DLP_PATH || 'Not found',
         uptime: process.uptime()
     });
 });
@@ -239,13 +256,6 @@ app.get('/health', (req, res) => {
 // Start server
 app.listen(PORT, '0.0.0.0', () => {
     console.log(`🌐 Web server running on port ${PORT}`);
-});
-
-// Cleanup on exit
-process.on('SIGINT', async () => {
-    console.log('\n🛑 Shutting down...');
-    await downloader.cleanupAll();
-    process.exit(0);
 });
 
 // Login to Discord
