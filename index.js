@@ -1,15 +1,18 @@
-// index.js - Main Instagram Discord Bot with Bot Token
+// index.js - Main Instagram Discord Bot with Slash Commands
 require('dotenv').config();
 const express = require('express');
 const ApifyService = require('./apifyService');
-const DiscordService = require('./discordService');
+const DiscordBot = require('./discordBot');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 // Initialize services
 const apify = new ApifyService(process.env.APIFY_API_TOKEN);
-const discord = new DiscordService(process.env.DISCORD_BOT_TOKEN, process.env.DISCORD_CHANNEL_ID);
+const discordBot = new DiscordBot(process.env.DISCORD_BOT_TOKEN, apify);
+
+// Start Discord bot
+discordBot.init();
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -55,57 +58,32 @@ app.get('/', (req, res) => {
                     color: #888; 
                     margin-bottom: 30px;
                 }
-                .input-group {
+                .command-list {
+                    background: #2a2a2a;
+                    border-radius: 10px;
+                    padding: 20px;
                     margin-bottom: 20px;
                 }
-                label {
+                .command-item {
                     color: white;
-                    display: block;
-                    margin-bottom: 5px;
+                    padding: 10px;
+                    border-bottom: 1px solid #444;
                 }
-                input, select {
-                    width: 100%;
-                    padding: 12px;
-                    background: #2a2a2a;
-                    border: 2px solid #444;
-                    border-radius: 8px;
-                    color: white;
-                    font-size: 14px;
-                }
-                input:focus, select:focus {
-                    border-color: #ff0000;
-                    outline: none;
-                }
-                button {
-                    width: 100%;
-                    padding: 15px;
-                    background: #ff0000;
-                    color: white;
-                    border: none;
-                    border-radius: 10px;
-                    font-size: 16px;
+                .command-name {
+                    color: #ff0000;
                     font-weight: bold;
-                    cursor: pointer;
-                    margin-top: 20px;
                 }
-                button:hover {
-                    background: #cc0000;
+                .command-desc {
+                    color: #aaa;
+                    margin-left: 20px;
                 }
                 .status {
-                    margin-top: 20px;
-                    padding: 15px;
-                    border-radius: 8px;
-                    display: none;
-                }
-                .status.success {
-                    background: #004d00;
+                    text-align: center;
+                    padding: 20px;
+                    background: #1a1a1a;
+                    border-radius: 10px;
                     color: #00ff00;
-                    display: block;
-                }
-                .status.error {
-                    background: #4d0000;
-                    color: #ff6666;
-                    display: block;
+                    margin-top: 20px;
                 }
                 .footer {
                     margin-top: 30px;
@@ -117,121 +95,54 @@ app.get('/', (req, res) => {
         <body>
             <div class="container">
                 <h1>IMPOSTER</h1>
-                <div class="subtitle">Instagram Discord Bot</div>
+                <div class="subtitle">Instagram Discord Bot with Slash Commands</div>
                 
-                <div class="input-group">
-                    <label>Action Type:</label>
-                    <select id="actionType">
-                        <option value="profile">Profile Details + Ban Check</option>
-                        <option value="stories">Active Stories</option>
-                        <option value="reel">Reel Download</option>
-                        <option value="post">Post Download</option>
-                    </select>
+                <div class="command-list">
+                    <div class="command-item">
+                        <span class="command-name">/help</span>
+                        <span class="command-desc">- Show all available commands</span>
+                    </div>
+                    <div class="command-item">
+                        <span class="command-name">/profile &lt;username&gt;</span>
+                        <span class="command-desc">- Get Instagram profile details with ban check</span>
+                    </div>
+                    <div class="command-item">
+                        <span class="command-name">/stories &lt;username&gt;</span>
+                        <span class="command-desc">- Get active Instagram stories</span>
+                    </div>
+                    <div class="command-item">
+                        <span class="command-name">/reel &lt;url&gt;</span>
+                        <span class="command-desc">- Download Instagram reel</span>
+                    </div>
+                    <div class="command-item">
+                        <span class="command-name">/post &lt;url&gt;</span>
+                        <span class="command-desc">- Download Instagram post</span>
+                    </div>
+                    <div class="command-item">
+                        <span class="command-name">/stats</span>
+                        <span class="command-desc">- Show bot statistics</span>
+                    </div>
                 </div>
                 
-                <div class="input-group">
-                    <label>Instagram Username or URL:</label>
-                    <input type="text" id="input" placeholder="e.g., cristiano or https://instagram.com/reel/xxx">
+                <div class="status">
+                    Bot Status: ${discordBot.getStatus() === 'CONNECTED' ? '✅ ONLINE' : '❌ OFFLINE'}
                 </div>
-                
-                <button onclick="submitRequest()">🚀 SEND TO DISCORD</button>
-                
-                <div id="status" class="status"></div>
                 
                 <div class="footer">
                     © IMPOSTER 2026-2027
                 </div>
             </div>
-            
-            <script>
-                async function submitRequest() {
-                    const action = document.getElementById('actionType').value;
-                    const input = document.getElementById('input').value.trim();
-                    const statusDiv = document.getElementById('status');
-                    
-                    if (!input) {
-                        statusDiv.className = 'status error';
-                        statusDiv.textContent = 'Please enter a username or URL';
-                        return;
-                    }
-                    
-                    statusDiv.className = 'status';
-                    statusDiv.textContent = 'Processing...';
-                    
-                    try {
-                        const response = await fetch('/api/fetch', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ action, input })
-                        });
-                        
-                        const data = await response.json();
-                        
-                        if (response.ok) {
-                            statusDiv.className = 'status success';
-                            statusDiv.textContent = '✅ Sent to Discord successfully!';
-                        } else {
-                            statusDiv.className = 'status error';
-                            statusDiv.textContent = '❌ Error: ' + data.error;
-                        }
-                    } catch (error) {
-                        statusDiv.className = 'status error';
-                        statusDiv.textContent = '❌ Error: ' + error.message;
-                    }
-                }
-            </script>
         </body>
         </html>
     `);
-});
-
-// ==================== API ENDPOINT ====================
-app.post('/api/fetch', async (req, res) => {
-    const { action, input } = req.body;
-    
-    if (!action || !input) {
-        return res.status(400).json({ error: 'Missing required fields' });
-    }
-    
-    try {
-        switch(action) {
-            case 'profile':
-                const profile = await apify.getProfileDetails(input);
-                await discord.sendProfile(profile);
-                break;
-                
-            case 'stories':
-                const stories = await apify.getStories(input);
-                await discord.sendStories(input, stories);
-                break;
-                
-            case 'reel':
-                const reel = await apify.getReel(input);
-                await discord.sendReel(reel);
-                break;
-                
-            case 'post':
-                const post = await apify.getPost(input);
-                await discord.sendPost(post);
-                break;
-                
-            default:
-                return res.status(400).json({ error: 'Invalid action' });
-        }
-        
-        res.json({ success: true });
-    } catch (error) {
-        console.error('API error:', error);
-        res.status(500).json({ error: error.message });
-    }
 });
 
 // ==================== HEALTH CHECK ====================
 app.get('/health', (req, res) => {
     res.json({
         status: 'IMPOSTER ONLINE',
-        version: '2.0.0',
-        discord: discord.ready ? 'CONNECTED' : 'DISCONNECTED',
+        version: '3.0.0',
+        discord: discordBot.getStatus(),
         copyright: 'IMPOSTER 2026-2027'
     });
 });
@@ -249,9 +160,9 @@ app.listen(PORT, () => {
 ╠══════════════════════════════════════════════════════════╣
 ║   📍 Port: ${PORT}                                           
 ║   🌐 URL: http://localhost:${PORT}                             
-║   🔥 Instagram → Discord Bot Active
-║   📊 Features: Profile • Stories • Reels • Posts
-║   🤖 Bot Status: ${discord.ready ? '✅ CONNECTED' : '❌ DISCONNECTED'}
+║   🔥 Instagram Discord Bot with Slash Commands
+║   📊 Commands: /help • /profile • /stories • /reel • /post • /stats
+║   🤖 Bot Status: ${discordBot.getStatus()}
 ║   © IMPOSTER 2026-2027                          
 ╚══════════════════════════════════════════════════════════╝
     `);
