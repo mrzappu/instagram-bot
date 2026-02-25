@@ -1,8 +1,6 @@
-// discordBot.js - Discord Bot with Slash Commands
 const { Client, GatewayIntentBits, EmbedBuilder } = require('discord.js');
 const axios = require('axios');
 const fs = require('fs');
-const path = require('path');
 
 class DiscordBot {
     constructor(botToken, apifyService) {
@@ -21,42 +19,24 @@ class DiscordBot {
     }
 
     setupCommands() {
-        // Help Command
-        this.commands.set('help', {
-            execute: this.handleHelp.bind(this)
-        });
-
-        // Profile Command
-        this.commands.set('profile', {
-            execute: this.handleProfile.bind(this)
-        });
-
-        // Stories Command
-        this.commands.set('stories', {
-            execute: this.handleStories.bind(this)
-        });
-
-        // Reel Command
-        this.commands.set('reel', {
-            execute: this.handleReel.bind(this)
-        });
-
-        // Post Command
-        this.commands.set('post', {
-            execute: this.handlePost.bind(this)
-        });
-
-        // Stats Command
-        this.commands.set('stats', {
-            execute: this.handleStats.bind(this)
-        });
+        this.commands.set('help', { execute: this.handleHelp.bind(this) });
+        this.commands.set('profile', { execute: this.handleProfile.bind(this) });
+        this.commands.set('stories', { execute: this.handleStories.bind(this) });
+        this.commands.set('reel', { execute: this.handleReel.bind(this) });
+        this.commands.set('post', { execute: this.handlePost.bind(this) });
+        this.commands.set('stats', { execute: this.handleStats.bind(this) });
     }
 
     async init() {
         this.client.once('ready', () => {
             console.log('✅ Discord Bot connected with slash commands');
             this.ready = true;
-            this.setActivity();
+            this.client.user.setActivity('/help | Instagram Bot', { type: 3 });
+            
+            // Log bot info
+            console.log(`🤖 Bot Tag: ${this.client.user.tag}`);
+            console.log(`📊 Servers: ${this.client.guilds.cache.size}`);
+            console.log(`👥 Users: ${this.client.users.cache.size}`);
         });
 
         this.client.on('interactionCreate', async (interaction) => {
@@ -66,6 +46,7 @@ class DiscordBot {
             if (!command) return;
 
             try {
+                console.log(`📝 Command: ${interaction.commandName} by ${interaction.user.tag}`);
                 await interaction.deferReply();
                 await command.execute(interaction);
             } catch (error) {
@@ -84,12 +65,6 @@ class DiscordBot {
 
         await this.client.login(this.botToken);
     }
-
-    setActivity() {
-        this.client.user.setActivity('/help | Instagram Bot', { type: 3 }); // 3 = WATCHING
-    }
-
-    // ==================== COMMAND HANDLERS ====================
 
     async handleHelp(interaction) {
         const embed = new EmbedBuilder()
@@ -112,7 +87,6 @@ class DiscordBot {
 
     async handleProfile(interaction) {
         const username = interaction.options.getString('username');
-        
         await interaction.editReply({ content: `🔍 Fetching profile for @${username}...` });
 
         const profileData = await this.apify.getProfileDetails(username);
@@ -158,7 +132,6 @@ class DiscordBot {
 
     async handleStories(interaction) {
         const username = interaction.options.getString('username');
-        
         await interaction.editReply({ content: `📖 Fetching stories for @${username}...` });
 
         const stories = await this.apify.getStories(username);
@@ -183,7 +156,6 @@ class DiscordBot {
 
         await interaction.editReply({ content: null, embeds: [summaryEmbed] });
 
-        // Send each story
         for (let i = 0; i < Math.min(stories.length, 5); i++) {
             const story = stories[i];
             const isVideo = story.mediaType === 2;
@@ -225,7 +197,6 @@ class DiscordBot {
 
     async handleReel(interaction) {
         const url = interaction.options.getString('url');
-        
         await interaction.editReply({ content: `🎬 Fetching reel...` });
 
         const reelData = await this.apify.getReel(url);
@@ -266,7 +237,6 @@ class DiscordBot {
 
     async handlePost(interaction) {
         const url = interaction.options.getString('url');
-        
         await interaction.editReply({ content: `📸 Fetching post...` });
 
         const postData = await this.apify.getPost(url);
@@ -342,7 +312,6 @@ class DiscordBot {
         await interaction.editReply({ embeds: [embed] });
     }
 
-    // ==================== HELPER METHODS ====================
     async sendMediaFile(interaction, url, filename) {
         try {
             const response = await axios({
@@ -364,7 +333,6 @@ class DiscordBot {
             fs.unlink(tempPath, () => {});
         } catch (error) {
             console.error('Media send error:', error.message);
-            await interaction.followUp({ content: '❌ Failed to download media file.' });
         }
     }
 
