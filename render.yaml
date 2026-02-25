@@ -1,14 +1,14 @@
 services:
   - type: web
-    name: instagram-downloader-no-api
+    name: instagram-downloader-bot
     runtime: node
-    repo: https://github.com/YOUR_USERNAME/instagram-downloader-no-api
+    repo: https://github.com/YOUR_USERNAME/instagram-downloader-bot
     plan: free
     region: oregon
     buildCommand: |
-      apt-get update && apt-get install -y python3-pip python3-venv pipx
-      pipx ensurepath
-      pipx install yt-dlp
+      apt-get update && apt-get install -y python3-pip python3-venv ffmpeg
+      curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp
+      chmod a+rx /usr/local/bin/yt-dlp
       npm install
     startCommand: npm start
     envVars:
@@ -18,5 +18,3 @@ services:
         sync: false
       - key: DISCORD_CHANNEL_ID
         value: 1475868986301223003
-      - key: PATH
-        value: /opt/render/project/src/node_modules/.bin:/opt/render/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
