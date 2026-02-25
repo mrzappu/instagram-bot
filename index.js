@@ -1,15 +1,36 @@
-// index.js - Instagram Downloader Bot
+// index.js - Main Discord Bot with yt-dlp (NO API KEYS)
 require('dotenv').config();
 const { Client, GatewayIntentBits, EmbedBuilder } = require('discord.js');
 const express = require('express');
-const axios = require('axios');
-const InstagramAPI = require('./instagramAPI');
+const InstagramDownloader = require('./instagramDownloader');
+const { exec } = require('child_process');
+const util = require('util');
+const execPromise = util.promisify(exec);
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Initialize Instagram API
-const instagramAPI = new InstagramAPI(process.env.RAPIDAPI_KEY);
+// Initialize downloader
+const downloader = new InstagramDownloader();
+
+// Check if yt-dlp is installed
+async function checkYtDlp() {
+    try {
+        const { stdout } = await execPromise('yt-dlp --version');
+        console.log(`✅ yt-dlp version ${stdout.trim()} found`);
+        return true;
+    } catch (error) {
+        console.error('❌ yt-dlp not found! Attempting to install...');
+        try {
+            await execPromise('pip install yt-dlp');
+            console.log('✅ yt-dlp installed successfully');
+            return true;
+        } catch (installError) {
+            console.error('❌ Failed to install yt-dlp:', installError.message);
+            return false;
+        }
+    }
+}
 
 // Discord Client Setup
 const client = new Client({
@@ -20,10 +41,10 @@ const client = new Client({
     ]
 });
 
-const TARGET_CHANNEL_ID = process.env.DISCORD_CHANNEL_ID || '1475868986301223003';
+const TARGET_CHANNEL_ID = process.env.DISCORD_CHANNEL_ID;
 
 // Bot Ready Event
-client.once('ready', () => {
+client.once('ready', async () => {
     console.log(`
 ╔══════════════════════════════════════════════════════════╗
 ║   ██╗███╗   ███╗██████╗  ██████╗ ███████╗████████╗     ║
@@ -34,27 +55,29 @@ client.once('ready', () => {
 ║   ╚═╝╚═╝     ╚═╝╚═╝      ╚═════╝ ╚══════╝   ╚═╝        ║
 ╠══════════════════════════════════════════════════════════╣
 ║   📍 Bot: ${client.user.tag}
-║   📍 Monitoring Channel: ${TARGET_CHANNEL_ID}
-║   🔥 Instagram Downloader Bot - NO COMMANDS NEEDED
-║   📥 Just paste any Instagram link in the channel
+║   📍 Channel: ${TARGET_CHANNEL_ID}
+║   🔥 Instagram Downloader - NO API KEYS NEEDED
+║   📥 Powered by yt-dlp
 ║   © IMPOSTER 2026-2027                          
 ╚══════════════════════════════════════════════════════════╝
     `);
 
-    // Set bot status
-    client.user.setActivity('Instagram Links', { type: 3 }); // WATCHING
+    // Check yt-dlp installation
+    const ytDlpReady = await checkYtDlp();
+    if (!ytDlpReady) {
+        console.error('❌ Bot cannot function without yt-dlp. Exiting...');
+        process.exit(1);
+    }
+
+    client.user.setActivity('Instagram Links', { type: 3 });
 });
 
 // Message Handler - Auto detect Instagram links
 client.on('messageCreate', async (message) => {
-    // Ignore bot messages
     if (message.author.bot) return;
-    
-    // Only respond in the specified channel
     if (message.channel.id !== TARGET_CHANNEL_ID) return;
 
-    // Extract Instagram URL from message
-    const instagramUrl = await instagramAPI.extractInstagramUrl(message.content);
+    const instagramUrl = await downloader.extractInstagramUrl(message.content);
     
     if (!instagramUrl) return;
 
@@ -63,13 +86,18 @@ client.on('messageCreate', async (message) => {
     // Send typing indicator
     await message.channel.sendTyping();
 
-    // Download the media
-    const media = await instagramAPI.downloadInstagramMedia(instagramUrl);
+    // Send initial status
+    const statusMsg = await message.reply({
+        content: `📥 Downloading Instagram content...\nURL: ${instagramUrl}`,
+        allowedMentions: { repliedUser: true }
+    });
 
-    if (!media || !media.mediaUrls || media.mediaUrls.length === 0) {
-        return message.reply({
-            content: '❌ Could not download this Instagram content. It might be private or the link is invalid.',
-            allowedMentions: { repliedUser: true }
+    // Download the media
+    const media = await downloader.downloadMedia(instagramUrl);
+
+    if (!media) {
+        return await statusMsg.edit({
+            content: `❌ Failed to download. This might be a private account or an unsupported format.\nURL: ${instagramUrl}`
         });
     }
 
@@ -78,65 +106,43 @@ client.on('messageCreate', async (message) => {
         .setColor(0xff0000)
         .setTitle('📥 Instagram Downloader')
         .setDescription(`Downloaded for ${message.author}`)
-        .setFooter({ text: `IMPOSTER Instagram Bot • ${new Date().toLocaleString()}` });
+        .addFields(
+            { name: '📱 Type', value: media.fileName.endsWith('.mp4') ? 'Video' : 'Image', inline: true },
+            { name: '📦 Size', value: `${(media.fileSize / 1024 / 1024).toFixed(2)} MB`, inline: true }
+        )
+        .setFooter({ text: `IMPOSTER Instagram Bot • No API Required` })
+        .setTimestamp();
 
-    if (media.caption) {
-        embed.addFields({ name: '📝 Caption', value: media.caption.substring(0, 200) });
+    if (media.uploader) {
+        embed.addFields({ name: '👤 Uploader', value: `@${media.uploader}`, inline: true });
     }
 
-    if (media.username) {
-        embed.addFields({ name: '👤 User', value: `@${media.username}`, inline: true });
+    if (media.description) {
+        const shortDesc = media.description.length > 100 
+            ? media.description.substring(0, 100) + '...' 
+            : media.description;
+        embed.addFields({ name: '📝 Caption', value: shortDesc });
     }
-
-    embed.addFields({ 
-        name: '📱 Type', 
-        value: media.type.charAt(0).toUpperCase() + media.type.slice(1), 
-        inline: true 
-    });
 
     // Send the embed
-    await message.reply({ embeds: [embed] });
+    await statusMsg.edit({ content: null, embeds: [embed] });
 
-    // Download and send each media file
-    for (let i = 0; i < media.mediaUrls.length; i++) {
-        const mediaUrl = media.mediaUrls[i];
-        const isVideo = mediaUrl.includes('.mp4') || media.type === 'video';
-        const extension = isVideo ? 'mp4' : 'jpg';
-        
-        try {
-            // Download the file
-            const response = await axios({
-                method: 'GET',
-                url: mediaUrl,
-                responseType: 'stream'
-            });
-
-            // Send to Discord
-            await message.channel.send({
-                files: [{
-                    attachment: response.data,
-                    name: `instagram_${Date.now()}_${i + 1}.${extension}`
-                }]
-            });
-
-            // Small delay between multiple files
-            if (i < media.mediaUrls.length - 1) {
-                await new Promise(resolve => setTimeout(resolve, 1000));
-            }
-        } catch (error) {
-            console.error('Error sending file:', error.message);
-            
-            // Fallback: send the URL if file download fails
-            if (i === 0) {
-                await message.channel.send(`🔗 Direct link: ${mediaUrl}`);
-            }
-        }
+    // Send the file
+    try {
+        await message.channel.send({
+            files: [{
+                attachment: media.filePath,
+                name: media.fileName
+            }]
+        });
+        console.log(`✅ Successfully sent: ${media.fileName}`);
+    } catch (error) {
+        console.error('Error sending file:', error.message);
+        await message.channel.send(`❌ Failed to send file. The file might be too large for Discord.`);
     }
 
-    // Send success message
-    if (media.mediaUrls.length > 0) {
-        await message.channel.send(`✅ Successfully downloaded ${media.mediaUrls.length} file(s)!`);
-    }
+    // Clean up temp files
+    await downloader.cleanup(media.filePath);
 });
 
 // Error Handler
@@ -180,6 +186,12 @@ app.get('/', (req, res) => {
                 .online {
                     color: #00ff00;
                 }
+                .feature {
+                    background: #333;
+                    padding: 10px;
+                    margin: 10px 0;
+                    border-radius: 5px;
+                }
                 .footer {
                     margin-top: 30px;
                     color: #ff0000;
@@ -194,7 +206,16 @@ app.get('/', (req, res) => {
                 <div class="status">
                     <h3>Bot Status: <span class="online">✅ ONLINE</span></h3>
                     <p>Monitoring Channel: <code>${TARGET_CHANNEL_ID}</code></p>
-                    <p>No commands needed - just paste Instagram links!</p>
+                </div>
+                
+                <div class="feature">
+                    <strong>🔥 NO API KEYS REQUIRED</strong>
+                </div>
+                <div class="feature">
+                    <strong>📥 Powered by yt-dlp</strong>
+                </div>
+                <div class="feature">
+                    <strong>🎯 Just paste any Instagram link!</strong>
                 </div>
                 
                 <div class="footer">
@@ -218,6 +239,13 @@ app.get('/health', (req, res) => {
 // Start server
 app.listen(PORT, '0.0.0.0', () => {
     console.log(`🌐 Web server running on port ${PORT}`);
+});
+
+// Cleanup on exit
+process.on('SIGINT', async () => {
+    console.log('\n🛑 Shutting down...');
+    await downloader.cleanupAll();
+    process.exit(0);
 });
 
 // Login to Discord
